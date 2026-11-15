@@ -1,0 +1,28 @@
+name: why_rebuild
+description: >-
+  Debug-only Flutter tool that tells you, and your AI coding agent, why each
+  widget rebuilt (setState, InheritedWidget, animation, state library), whether
+  the rebuild was wasted, and how to fix it.
+version: 0.1.0
+repository: https://github.com/flutterboy20/why_rebuild
+issue_tracker: https://github.com/flutterboy20/why_rebuild/issues
+topics:
+  - debugging
+  - performance
+  - widgets
+  - devtools
+  - testing
+
+environment:
+  sdk: ">=3.6.0 <4.0.0"
+  flutter: ">=3.27.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Only used by package:why_rebuild/testing.dart (scanTest, expectRebuildBudget).
+  flutter_test:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_lints: ^5.0.0
