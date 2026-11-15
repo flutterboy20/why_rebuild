@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>why_rebuild</title>
+<meta name="description" content="A debug-only Flutter package that tells you why each widget rebuilt, whether the rebuild was wasted, and how to fix it. Explained in plain English.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --paper: #E8EEEC;
+  --panel: #F7FAF9;
+  --ink: #16222E;
+  --ink-soft: #4A5866;
+  --line: #C9D4D1;
+  --rebuilt: #E39A2D;
+  --rebuilt-bg: #FBEBD2;
+  --wasted: #C93B67;
+  --wasted-bg: #F8DCE5;
+  --needed: #1C8577;
+  --needed-bg: #D3EEE9;
+  --code-bg: #16222E;
+  --code-ink: #DDE7E4;
+  --focus: #2F6FD6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #121B23;
+    --panel: #1A2630;
+    --ink: #E6EEEB;
+    --ink-soft: #A3B2B9;
+    --line: #2E3D48;
+    --rebuilt: #F0AE4A;
+    --rebuilt-bg: #3A2C15;
+    --wasted: #EE6A92;
+    --wasted-bg: #40202B;
+    --needed: #45C2AF;
+    --needed-bg: #163631;
+    --code-bg: #0C1319;
+    --code-ink: #DDE7E4;
+    --focus: #7AA8F5;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #121B23; --panel: #1A2630; --ink: #E6EEEB; --ink-soft: #A3B2B9; --line: #2E3D48;
+  --rebuilt: #F0AE4A; --rebuilt-bg: #3A2C15; --wasted: #EE6A92; --wasted-bg: #40202B;
+  --needed: #45C2AF; --needed-bg: #163631; --code-bg: #0C1319; --code-ink: #DDE7E4; --focus: #7AA8F5;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Atkinson Hyperlegible", system-ui, sans-serif;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+}
+h1, h2, h3 {
+  font-family: "Bricolage Grotesque", system-ui, sans-serif;
+  line-height: 1.1;
+  margin: 0 0 .5em;
+  letter-spacing: -0.01em;
+}
+h1 { font-size: clamp(2.4rem, 6vw, 4.2rem); font-weight: 800; letter-spacing: -0.03em; }
+h2 { font-size: clamp(1.7rem, 3.6vw, 2.5rem); font-weight: 700; }
+h3 { font-size: 1.25rem; font-weight: 700; }
+p { margin: 0 0 1em; max-width: 68ch; }
+a { color: inherit; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+code, pre { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .86em; }
+:not(pre) > code { background: var(--panel); border: 1px solid var(--line); padding: .05em .35em; border-radius: 5px; }
+pre {
+  background: var(--code-bg); color: var(--code-ink);
+  padding: 1rem 1.1rem; border-radius: 10px; overflow-x: auto; line-height: 1.55; margin: 0 0 1rem;
+}
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+/* Grid children holding <pre> must be allowed to shrink, or code widens the page. */
+.hero > *, .split > *, .ways > *, .people > *, .anno > *, .steps li > *, .mistakes > * { min-width: 0; }
+@media (min-width: 720px) { .wrap { padding: 0 32px; } }
+section { padding: 4.5rem 0; border-top: 1px solid var(--line); }
+.lede { font-size: 1.25rem; color: var(--ink-soft); max-width: 46ch; }
+
+/* top bar */
+.bar { display: flex; justify-content: space-between; align-items: center; padding: 1.1rem 0; gap: 1rem; }
+.mark { font-family: "Bricolage Grotesque", sans-serif; font-weight: 800; font-size: 1.15rem; text-decoration: none; }
+.mark span { color: var(--wasted); }
+.bar nav { display: flex; gap: 1.1rem; flex-wrap: wrap; font-size: .95rem; }
+.bar nav a { text-decoration: none; color: var(--ink-soft); }
+.bar nav a:hover { color: var(--ink); text-decoration: underline; }
+
+/* hero */
+.hero { display: grid; gap: 2.5rem; padding: 2.5rem 0 4.5rem; align-items: start; }
+@media (min-width: 960px) { .hero { grid-template-columns: 1fr 1.05fr; gap: 3.5rem; padding-top: 4rem; } }
+.hero h1 { max-width: 12ch; }
+.hero .install { margin-top: 1.75rem; max-width: 30rem; }
+.hero .install p { font-size: .95rem; color: var(--ink-soft); margin-bottom: .5rem; }
+
+/* demo */
+.demo {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+  padding: 1.25rem; box-shadow: 0 1px 0 var(--line), 0 18px 40px -28px rgba(22,34,46,.45);
+}
+.demo-head { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+.demo-head h2 { font-size: 1.2rem; margin: 0; }
+.controls { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+button {
+  font: inherit; font-weight: 700; cursor: pointer; border-radius: 999px;
+  padding: .55rem 1.05rem; border: 2px solid var(--ink); background: var(--ink); color: var(--paper);
+}
+button:hover { filter: brightness(1.15); }
+button.ghost { background: transparent; color: var(--ink); }
+.switch { display: inline-flex; align-items: center; gap: .45rem; font-size: .95rem; cursor: pointer; user-select: none; }
+.switch input { width: 1.1rem; height: 1.1rem; accent-color: var(--needed); }
+
+.tree { list-style: none; margin: 0; padding: 0; font-family: "JetBrains Mono", monospace; font-size: .9rem; }
+.tree ul { list-style: none; margin: 0; padding-left: 1.35rem; border-left: 2px solid var(--line); margin-left: .65rem; }
+.node {
+  display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+  width: 100%; text-align: left; font: inherit; font-weight: 400; color: var(--ink);
+  background: transparent; border: 1px solid transparent; border-radius: 8px;
+  padding: .32rem .55rem; margin: .12rem 0; cursor: pointer;
+}
+.node:hover { border-color: var(--line); filter: none; }
+.node[aria-pressed="true"] { border-color: var(--ink); }
+.node .count { font-size: .78rem; color: var(--ink-soft); white-space: nowrap; }
+.node.is-needed { background: var(--needed-bg); }
+.node.is-wasted { background: var(--wasted-bg); }
+.node.is-rebuilt { background: var(--rebuilt-bg); }
+.node.flash { animation: flash .7s ease-out; }
+@keyframes flash { 0% { box-shadow: 0 0 0 4px var(--rebuilt); } 100% { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .node.flash { animation: none; } }
+
+.legend { display: flex; flex-wrap: wrap; gap: .4rem 1rem; font-size: .85rem; color: var(--ink-soft); margin: 1rem 0 .25rem; }
+.legend span::before { content: ""; display: inline-block; width: .8rem; height: .8rem; border-radius: 3px; margin-right: .35rem; vertical-align: -1px; }
+.legend .l-needed::before { background: var(--needed-bg); border: 2px solid var(--needed); }
+.legend .l-wasted::before { background: var(--wasted-bg); border: 2px solid var(--wasted); }
+.legend .l-rebuilt::before { background: var(--rebuilt-bg); border: 2px solid var(--rebuilt); }
+
+.why {
+  margin-top: 1rem; border-radius: 12px; padding: 1rem 1.1rem; background: var(--paper);
+  border-left: 5px solid var(--line); min-height: 9.5rem;
+}
+.why.v-wasted { border-left-color: var(--wasted); }
+.why.v-needed { border-left-color: var(--needed); }
+.why h3 { font-size: 1.05rem; margin-bottom: .35rem; }
+.why dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: .2rem .8rem; font-size: .95rem; }
+.why dt { color: var(--ink-soft); }
+.why dd { margin: 0; overflow-wrap: anywhere; }
+.why dd code { font-size: .82rem; }
+.score { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: .9rem; font-size: .95rem; color: var(--ink-soft); }
+.score strong { font-family: "Bricolage Grotesque", sans-serif; font-size: 1.6rem; color: var(--ink); display: block; line-height: 1; }
+
+/* problem */
+.split { display: grid; gap: 2rem; }
+@media (min-width: 880px) { .split { grid-template-columns: 1fr 1fr; gap: 3.5rem; } }
+.mistakes { display: grid; gap: 1rem; margin-top: 1.5rem; }
+@media (min-width: 880px) { .mistakes { grid-template-columns: repeat(3, 1fr); } }
+.mistake { border-top: 4px solid var(--wasted); padding-top: .9rem; }
+.mistake p { font-size: .98rem; }
+.mistake .fix { color: var(--needed); font-weight: 700; }
+.analogy { font-family: "Bricolage Grotesque", sans-serif; font-size: clamp(1.35rem, 2.6vw, 1.8rem); font-weight: 500; line-height: 1.3; max-width: 26ch; }
+
+/* pipeline */
+.pipe { list-style: none; padding: 0; margin: 2rem 0 0; display: grid; gap: 1rem; counter-reset: step; }
+@media (min-width: 880px) { .pipe { grid-template-columns: repeat(5, 1fr); gap: .75rem; } }
+.pipe li { counter-increment: step; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 1rem; position: relative; }
+.pipe li::before {
+  content: counter(step); font-family: "Bricolage Grotesque", sans-serif; font-weight: 800;
+  display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: 50%;
+  background: var(--ink); color: var(--paper); margin-bottom: .6rem;
+}
+@media (min-width: 880px) {
+  .pipe li:not(:last-child)::after {
+    content: ""; position: absolute; top: 1.9rem; right: -.75rem; width: .75rem; height: 2px; background: var(--ink);
+  }
+}
+.pipe h3 { font-size: 1.05rem; }
+.pipe p { font-size: .95rem; margin: 0; color: var(--ink-soft); }
+.outputs { display: grid; gap: 1rem; margin-top: 1rem; }
+@media (min-width: 880px) { .outputs { grid-template-columns: repeat(3, 1fr); } }
+.outputs div { border: 2px dashed var(--line); border-radius: 14px; padding: .9rem 1rem; }
+.outputs strong { display: block; }
+.outputs span { color: var(--ink-soft); font-size: .95rem; }
+
+/* causes */
+.causes { width: 100%; border-collapse: collapse; margin-top: 1.5rem; font-size: 1rem; }
+.causes th, .causes td { text-align: left; vertical-align: top; padding: .85rem .75rem .85rem 0; border-bottom: 1px solid var(--line); }
+.causes th { font-family: "Bricolage Grotesque", sans-serif; font-size: .95rem; color: var(--ink-soft); font-weight: 500; }
+.causes td:first-child { white-space: nowrap; }
+@media (max-width: 640px) {
+  .causes thead { display: none; }
+  .causes tr { display: block; padding: .8rem 0; border-bottom: 1px solid var(--line); }
+  .causes td { display: block; border: 0; padding: .15rem 0; }
+}
+
+/* ways */
+.ways { display: grid; gap: 2rem; margin-top: 2rem; }
+@media (min-width: 960px) { .ways { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; } }
+.ways p { font-size: .98rem; }
+
+/* people */
+.people { display: grid; gap: 3rem; }
+@media (min-width: 960px) { .people { grid-template-columns: 1fr 1.15fr; gap: 4rem; } }
+.people ul { padding-left: 1.2rem; margin: 0; }
+.people li { margin-bottom: .7rem; }
+.steps { list-style: none; padding: 0; margin: 0; counter-reset: s; }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 2.4rem 1fr; gap: .9rem; padding: 1rem 0; border-bottom: 1px solid var(--line); }
+.steps li::before {
+  content: counter(s); font-family: "Bricolage Grotesque", sans-serif; font-weight: 800; font-size: 1.5rem;
+  color: var(--needed); line-height: 1.1;
+}
+.steps h3 { font-size: 1.08rem; margin-bottom: .25rem; }
+.steps p { margin: 0 0 .5rem; font-size: .98rem; }
+.steps pre { font-size: .8rem; margin: .4rem 0 0; }
+
+/* read the answer */
+.anno { display: grid; gap: 1.5rem; margin-top: 1.5rem; align-items: start; }
+@media (min-width: 960px) { .anno { grid-template-columns: 1.1fr 1fr; gap: 2.5rem; } }
+.anno ol { margin: 0; padding-left: 1.3rem; }
+.anno li { margin-bottom: .8rem; }
+.k { color: #F0AE4A; }
+.kw { color: #EE6A92; }
+.kn { color: #45C2AF; }
+
+/* safety */
+.safe { display: grid; gap: 1.25rem 2.5rem; margin-top: 1.5rem; }
+@media (min-width: 880px) { .safe { grid-template-columns: repeat(2, 1fr); } }
+.safe div { border-left: 4px solid var(--needed); padding-left: 1rem; }
+.safe strong { display: block; font-size: 1.05rem; }
+.safe span { color: var(--ink-soft); }
+
+.support { border-collapse: collapse; margin-top: 1rem; }
+.support td { padding: .45rem 1.5rem .45rem 0; border-bottom: 1px solid var(--line); }
+
+footer { border-top: 1px solid var(--line); padding: 2.5rem 0 3.5rem; color: var(--ink-soft); font-size: .95rem; }
+footer p { max-width: none; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="bar">
+  <a class="mark" href="#top">why<span>_</span>rebuild</a>
+  <nav aria-label="Sections">
+    <a href="#problem">The problem</a>
+    <a href="#how">How it works</a>
+    <a href="#use">Use it</a>
+    <a href="#interns">For interns</a>
+    <a href="https://github.com/flutterboy20/why_rebuild">GitHub</a>
+  </nav>
+</header>
+
+<main id="top">
+
+<div class="hero">
+  <div>
+    <h1>Know why every widget rebuilt.</h1>
+    <p class="lede">Flutter DevTools tells you <em>what</em> rebuilt. why_rebuild tells you <em>why</em>, whether the work was wasted, and how to fix it. Your AI coding agent can ask it too.</p>
+    <p>It's a debug-only package. Add one line to <code>main()</code>. No wrapper widgets, no setup screens, and nothing ships in your release build.</p>
+    <div class="install">
+      <p>Add it from GitHub until it's on pub.dev:</p>
+<pre>dev_dependencies:
+  why_rebuild:
+    git: https://github.com/flutterboy20/why_rebuild</pre>
+<pre>void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  WhyRebuild.instance.install();
+  runApp(const MyApp());
+}</pre>
+    </div>
+  </div>
+
+  <div class="demo" aria-labelledby="demo-title">
+    <div class="demo-head">
+      <h2 id="demo-title">Try it: a tiny shop screen</h2>
+      <div class="controls">
+        <button id="add" type="button">Add to cart</button>
+        <label class="switch"><input id="fixed" type="checkbox"> Fixed version</label>
+      </div>
+    </div>
+
+    <ul class="tree" id="tree" aria-label="Widget tree"></ul>
+
+    <div class="legend" aria-hidden="true">
+      <span class="l-needed">Needed: it shows new data</span>
+      <span class="l-wasted">Wasted: nothing it shows changed</span>
+    </div>
+
+    <div class="why" id="why" aria-live="polite">
+      <h3>Press "Add to cart"</h3>
+      <p style="margin:0">Then tap any widget in the tree to see why_rebuild's answer for it.</p>
+    </div>
+
+    <div class="score">
+      <div><strong id="s-total">0</strong>rebuilds this tap</div>
+      <div><strong id="s-wasted">0</strong>of them wasted</div>
+    </div>
+  </div>
+</div>
+
+<section id="problem">
+  <div class="split">
+    <div>
+      <h2>The problem it solves</h2>
+      <p>Every time something changes on screen, Flutter runs <code>build()</code> again for the widgets involved. That's normal. The trouble starts when Flutter rebuilds widgets whose content didn't change at all. Each extra rebuild costs a little time, and on a busy screen those costs add up to dropped frames: the app stutters when you scroll, type or animate.</p>
+      <p>DevTools can count rebuilds, but a count doesn't tell you who asked for the rebuild, or whether it was needed. So people guess, sprinkle <code>const</code> around, and hope.</p>
+    </div>
+    <div>
+      <p class="analogy">It's like repainting the whole house because one light bulb was changed. why_rebuild shows you who ordered the repaint, and which rooms didn't need it.</p>
+    </div>
+  </div>
+
+  <h3 style="margin-top:2.5rem">Three mistakes it catches in seconds</h3>
+  <div class="mistakes">
+    <div class="mistake">
+      <h3>State kept too high up</h3>
+      <p>A page calls <code>setState</code> to update a cart count, so every product tile on the page rebuilds too.</p>
+      <p class="fix">Fix: move the count into a small widget of its own, or make the tiles <code>const</code>.</p>
+    </div>
+    <div class="mistake">
+      <h3>Reading all of MediaQuery</h3>
+      <p>A form uses <code>MediaQuery.of(context)</code> to get the screen size, so it rebuilds every time the keyboard moves.</p>
+      <p class="fix">Fix: use <code>MediaQuery.sizeOf(context)</code>.</p>
+    </div>
+    <div class="mistake">
+      <h3>Animations that rebuild everything</h3>
+      <p>An <code>AnimatedBuilder</code> rebuilds its whole chart 60 times a second, even though only a spinner moves.</p>
+      <p class="fix">Fix: build the chart once and pass it as <code>child</code>.</p>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <h2>How it works</h2>
+  <p>Flutter has a debug-only hook that runs whenever a widget is marked to rebuild. why_rebuild listens on that hook and, for each of your widgets, works through five steps.</p>
+
+  <ol class="pipe">
+    <li><h3>Notice the rebuild</h3><p>A widget in your app is marked "needs rebuild".</p></li>
+    <li><h3>Find who asked</h3><p>It records the call stack, so it knows the exact method and <code>file:line</code> that started it.</p></li>
+    <li><h3>Name the cause</h3><p>setState, a changed InheritedWidget, an animation, a state library, or a parent rebuilding.</p></li>
+    <li><h3>Check if it was wasted</h3><p>It compares the widget's properties before and after. Same properties means wasted work.</p></li>
+    <li><h3>Suggest a fix</h3><p>It matches the pattern to a known fix, like "make it const" or "use MediaQuery.sizeOf".</p></li>
+  </ol>
+
+  <p style="margin-top:2rem">The answer is available in three places:</p>
+  <div class="outputs">
+    <div><strong>Your Dart code</strong><span><code>why('ProductTile')</code>, <code>report()</code>, <code>wasted()</code></span></div>
+    <div><strong>Your AI agent</strong><span>through the official Dart MCP server, no extra server</span></div>
+    <div><strong>Your tests</strong><span><code>expectRebuildBudget</code> fails the test and prints the fix</span></div>
+  </div>
+
+  <h3 style="margin-top:3rem">The reasons a widget rebuilds</h3>
+  <table class="causes">
+    <thead><tr><th scope="col">Cause</th><th scope="col">In plain English</th><th scope="col">Example of what you see</th></tr></thead>
+    <tbody>
+      <tr><td><code>setState</code></td><td>Your code changed the widget's own state.</td><td><code>setState in HomePageState.addToCart at lib/main.dart:164</code></td></tr>
+      <tr><td><code>parent rebuilt</code></td><td>A widget above it rebuilt and created it again. Most wasted rebuilds live here.</td><td><code>parent rebuilt (HomePage)</code></td></tr>
+      <tr><td><code>inherited</code></td><td>Something it reads from above changed, like Theme, MediaQuery or a Provider.</td><td><code>Provider&lt;CartModel&gt; changed (after CartModel.add)</code></td></tr>
+      <tr><td><code>listenable</code></td><td>An animation ticked, a notifier fired, or a stream or future delivered new data.</td><td><code>animation tick in AnimatedBuilder</code></td></tr>
+      <tr><td><code>stateLibrary</code></td><td>Riverpod, Bloc, GetX, MobX, signals or flutter_hooks asked for it.</td><td><code>Riverpod notified RiverpodCounterView after Counter.increment</code></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="use">
+  <h2>Three ways to use it</h2>
+  <div class="ways">
+    <div>
+      <h3>Ask from Dart</h3>
+      <p>Handy while you're debugging one screen. Print the top offenders or ask about one widget by name.</p>
+<pre>final scan = WhyRebuild.instance;
+print(scan.report(limit: 5));
+print(scan.why('ProductTile'));
+print(scan.wasted());
+scan.reset();</pre>
+    </div>
+    <div>
+      <h3>Let your AI agent ask</h3>
+      <p>Claude Code, Cursor and others connect through <code>dart mcp-server</code>, which ships with the Dart SDK. The agent records, reproduces the slow flow, reads the causes, edits the code and checks again. The repo includes a ready-made skill file for this.</p>
+<pre>ext.why_rebuild.record  action=start
+  ...use the app...
+ext.why_rebuild.record  action=stop
+ext.why_rebuild.why     widget=ProductTile</pre>
+    </div>
+    <div>
+      <h3>Guard it in tests</h3>
+      <p>Once a screen is fast, keep it fast. The test fails if a tap creates wasted rebuilds, and the failure message tells you why.</p>
+<pre>scanTest('add to cart stays cheap',
+    (tester) async {
+  await tester.pumpWidget(const MyApp());
+  await expectRebuildBudget(tester,
+      () =&gt; tester.tap(find.text('Add')),
+      forbidWasted: ['ProductTile']);
+});</pre>
+    </div>
+  </div>
+</section>
+
+<section id="interns">
+  <div class="people">
+    <div>
+      <h2>How it helps the team</h2>
+      <ul>
+        <li><strong>Less guessing.</strong> Every rebuild comes with a reason and a <code>file:line</code>. You fix the line it points to instead of trying things.</li>
+        <li><strong>Agents can do the legwork.</strong> An AI agent can find, fix and verify wasted rebuilds on its own, then show before and after numbers.</li>
+        <li><strong>Reviews get concrete.</strong> "This adds 40 wasted rebuilds per tap" is easier to act on than "this feels slow".</li>
+        <li><strong>Regressions get caught.</strong> Rebuild budgets in tests stop a fast screen from quietly getting slow again.</li>
+        <li><strong>It works with your state library.</strong> provider, Riverpod, Bloc, GetX, MobX, signals and flutter_hooks are recognized without any extra setup.</li>
+      </ul>
+    </div>
+    <div>
+      <h2>For interns: your first 20 minutes</h2>
+      <ol class="steps">
+        <li><div><h3>Add the package and the one line</h3><p>Put the dependency in <code>pubspec.yaml</code> and call <code>WhyRebuild.instance.install()</code> in <code>main()</code>, right after <code>ensureInitialized()</code>.</p></div></li>
+        <li><div><h3>Run the app in debug mode</h3><p>Use <code>flutter run</code> on an Android or iOS device, simulator or desktop. It doesn't work on web yet.</p></div></li>
+        <li><div><h3>Use the screen that feels slow</h3><p>Tap, scroll or type through it a few times, just like a user would.</p></div></li>
+        <li><div><h3>Ask what was wasted</h3><p>From a debug button or a test, print the list of widgets with wasted rebuilds:</p><pre>print(WhyRebuild.instance.wasted());</pre></div></li>
+        <li><div><h3>Read the fix hint and apply it</h3><p>Open the <code>file:line</code> it gives you. Most fixes are small: add <code>const</code>, split a widget, pass a <code>child</code>, or read less from <code>MediaQuery</code>.</p></div></li>
+        <li><div><h3>Prove it worked</h3><p>Hot reload, call <code>WhyRebuild.instance.reset()</code>, repeat the same taps and check again. The wasted count should drop to zero. Then add a <code>scanTest</code> so it stays that way.</p></div></li>
+      </ol>
+    </div>
+  </div>
+
+  <h3 style="margin-top:3.5rem">Reading an answer</h3>
+  <div class="anno">
+<pre>{<span class="k">"widget"</span>: "ProductTile",
+ <span class="k">"location"</span>: "lib/main.dart:173",
+ <span class="k">"rebuilds"</span>: 15, <span class="kw">"wasted"</span>: 15,
+ <span class="k">"causes"</span>: {"parent rebuilt (HomePage)": 15},
+ <span class="k">"triggers"</span>: {
+   "setState in HomePageState.addToCart
+    at lib/main.dart:164": 15},
+ <span class="kn">"fixHint"</span>: "Rebuilt only because an ancestor
+   rebuilt; its props never changed. Make it
+   const, or move the state that changes into
+   a smaller widget."}</pre>
+    <ol>
+      <li><strong>location</strong> is where your code creates the widget. That's the line to edit.</li>
+      <li><strong>rebuilds</strong> and <strong>wasted</strong>: here all 15 rebuilds were wasted. That's pure waste, so start with this one.</li>
+      <li><strong>causes</strong> says why: its parent <code>HomePage</code> rebuilt and created it again.</li>
+      <li><strong>triggers</strong> goes one step further back, to the code that started it all: <code>addToCart</code> calling <code>setState</code>.</li>
+      <li><strong>fixHint</strong> tells you what to change. If it's empty, the rebuild was needed and you can leave it alone.</li>
+    </ol>
+  </div>
+</section>
+
+<section id="safe">
+  <h2>It never breaks your app</h2>
+  <div class="safe">
+    <div><strong>Debug builds only</strong><span>In profile and release builds the scanner is removed completely, so users never run it.</span></div>
+    <div><strong>Steps aside for DevTools</strong><span>Turn on "Count widget builds" in DevTools and why_rebuild pauses by itself, then comes back when you turn it off.</span></div>
+    <div><strong>Protects itself</strong><span>Every hook is wrapped in error handling. After repeated internal errors it switches itself off instead of crashing your app.</span></div>
+    <div><strong>Quiet by default</strong><span>No console spam, and your own logs pass through untouched. Each problem is reported once.</span></div>
+    <div><strong>Small overhead</strong><span>About 1.1–1.5 times normal debug build time while recording, measured on the example app.</span></div>
+    <div><strong>Plays fair with other tools</strong><span>If another tool already uses the same Flutter hook, why_rebuild leaves it alone and tells you.</span></div>
+  </div>
+
+  <table class="support" aria-label="Support">
+    <tr><td>Flutter</td><td>3.27 and newer, tested in CI on 3.27, 3.47 and 3.50</td></tr>
+    <tr><td>Android, iOS</td><td>Supported in debug mode</td></tr>
+    <tr><td>Windows, macOS, Linux</td><td>Works (same engine)</td></tr>
+    <tr><td>Web</td><td>Not yet: <code>install()</code> prints one warning and does nothing</td></tr>
+  </table>
+</section>
+
+</main>
+
+<footer>
+  <p>why_rebuild 0.1.0, BSD-3-Clause license. Source, issues and the agent skill are on <a href="https://github.com/flutterboy20/why_rebuild">GitHub</a>.</p>
+</footer>
+</div>
+
+<script>
+(function () {
+  // The demo screen. "needed" widgets show the cart count; the rest don't.
+  var NODES = [
+    { id: 'app', name: 'MyApp', depth: 0 },
+    { id: 'home', name: 'HomePage', depth: 1, holdsState: true },
+    { id: 'badge', name: 'CartBadge', depth: 2, needed: true },
+    { id: 'list', name: 'ListView', depth: 2, tileParent: true },
+    { id: 't1', name: 'ProductTile (Apples)', depth: 3, tile: true },
+    { id: 't2', name: 'ProductTile (Bread)', depth: 3, tile: true },
+    { id: 't3', name: 'ProductTile (Cheese)', depth: 3, tile: true },
+    { id: 't4', name: 'ProductTile (Dates)', depth: 3, tile: true },
+    { id: 'chart', name: 'SalesChart', depth: 2, tileParent: true }
+  ];
+  var counts = {}, lastTap = {}, selected = null, tapped = false;
+  NODES.forEach(function (n) { counts[n.id] = 0; });
+
+  var tree = document.getElementById('tree');
+  var why = document.getElementById('why');
+  var fixed = document.getElementById('fixed');
+
+  // Build nested list markup from depths.
+  function render() {
+    var html = '', depth = 0;
+    NODES.forEach(function (n, i) {
+      while (depth < n.depth) { html += '<ul>'; depth++; }
+      while (depth > n.depth) { html += '</li></ul>'; depth--; }
+      if (i > 0 && NODES[i - 1].depth >= n.depth) html += '</li>';
+      html += '<li><button type="button" class="node" data-id="' + n.id + '" aria-pressed="false">' +
+        '<span>' + n.name + '</span><span class="count" id="c-' + n.id + '">0 rebuilds</span></button>';
+    });
+    while (depth > 0) { html += '</li></ul>'; depth--; }
+    html += '</li>';
+    tree.innerHTML = html;
+  }
+  render();
+
+  function result(n) {
+    var isFixed = fixed.checked;
+    if (n.id === 'badge') {
+      return isFixed
+        ? { v: 'needed', cause: 'setState', trigger: 'setState in CartBadgeState.add at lib/main.dart:88', hint: null }
+        : { v: 'needed', cause: 'parent rebuilt (HomePage)', trigger: 'setState in HomePageState.addToCart at lib/main.dart:164', hint: null };
+    }
+    if (n.id === 'home') {
+      return { v: 'needed', cause: 'setState', trigger: 'setState in HomePageState.addToCart at lib/main.dart:164', hint: null, note: 'It holds the cart count, so this rebuild is expected.' };
+    }
+    if (n.tile || n.tileParent) {
+      return { v: 'wasted', cause: 'parent rebuilt (HomePage)', trigger: 'setState in HomePageState.addToCart at lib/main.dart:164',
+        hint: 'Rebuilt only because an ancestor rebuilt; its props never changed. Make it const, or move the state that changes into a smaller widget.' };
+    }
+    return null;
+  }
+
+  function rebuiltThisTap() {
+    // Unfixed: HomePage holds the count, so it and everything it creates rebuild.
+    // Fixed: the count lives inside CartBadge, so only CartBadge rebuilds.
+    if (fixed.checked) return ['badge'];
+    return ['home', 'badge', 'list', 't1', 't2', 't3', 't4', 'chart'];
+  }
+
+  function paint(ids) {
+    var total = 0, wasted = 0;
+    tree.querySelectorAll('.node').forEach(function (el) {
+      var id = el.getAttribute('data-id');
+      el.classList.remove('is-needed', 'is-wasted', 'flash');
+      if (ids.indexOf(id) !== -1) {
+        var r = result(NODES.filter(function (n) { return n.id === id; })[0]);
+        el.classList.add(r && r.v === 'wasted' ? 'is-wasted' : 'is-needed');
+        void el.offsetWidth; el.classList.add('flash');
+        total++; if (r && r.v === 'wasted') wasted++;
+      }
+      document.getElementById('c-' + id).textContent = counts[id] + (counts[id] === 1 ? ' rebuild' : ' rebuilds');
+    });
+    document.getElementById('s-total').textContent = total;
+    document.getElementById('s-wasted').textContent = wasted;
+  }
+
+  function show(id) {
+    selected = id;
+    tree.querySelectorAll('.node').forEach(function (el) {
+      el.setAttribute('aria-pressed', el.getAttribute('data-id') === id ? 'true' : 'false');
+    });
+    var n = NODES.filter(function (x) { return x.id === id; })[0];
+    var name = n.name.replace(/ \(.*\)/, '');
+    if (!tapped || !lastTap[id]) {
+      why.className = 'why';
+      why.innerHTML = '<h3>' + name + '</h3><p style="margin:0">' +
+        (tapped ? 'Not rebuilt on the last tap. Nothing to fix here.' : 'Press "Add to cart" first, then look again.') + '</p>';
+      return;
+    }
+    var r = result(n);
+    why.className = 'why v-' + r.v;
+    why.innerHTML = '<h3>' + name + ': ' + (r.v === 'wasted' ? 'wasted rebuild' : 'needed rebuild') + '</h3>' +
+      '<dl><dt>Cause</dt><dd><code>' + r.cause + '</code></dd>' +
+      '<dt>Trigger</dt><dd><code>' + r.trigger + '</code></dd>' +
+      '<dt>Fix</dt><dd>' + (r.hint || r.note || 'None needed: it shows the new cart count.') + '</dd></dl>';
+  }
+
+  document.getElementById('add').addEventListener('click', function () {
+    tapped = true; lastTap = {};
+    var ids = rebuiltThisTap();
+    ids.forEach(function (id) { counts[id]++; lastTap[id] = true; });
+    paint(ids);
+    show(selected && lastTap[selected] ? selected : (fixed.checked ? 'badge' : 't1'));
+  });
+
+  fixed.addEventListener('change', function () {
+    NODES.forEach(function (n) { counts[n.id] = 0; });
+    tapped = false; lastTap = {};
+    paint([]);
+    why.className = 'why';
+    why.innerHTML = fixed.checked
+      ? '<h3>Fixed version</h3><p style="margin:0">The cart count now lives inside <code>CartBadge</code>. Press "Add to cart" and compare.</p>'
+      : '<h3>Original version</h3><p style="margin:0"><code>HomePage</code> holds the cart count. Press "Add to cart" to see the cost.</p>';
+  });
+
+  tree.addEventListener('click', function (e) {
+    var btn = e.target.closest('.node');
+    if (btn) show(btn.getAttribute('data-id'));
+  });
+})();
+</script>
+</body>
+</html>

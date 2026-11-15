@@ -20,3 +20,4 @@ example/**/ephemeral/
 example/ios/Pods/
 example/android/.gradle/
 example/android/local.properties
+docs/
