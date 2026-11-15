@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Core package: analyze + tests on the oldest supported Flutter line, the
+  # line the repo pins locally (.fvmrc), and the newest stable.
+  core:
+    name: core (Flutter ${{ matrix.flutter }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        flutter: ['3.27.x', '3.47.x', '3.50.x']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ matrix.flutter }}
+          cache: true
+      - run: flutter --version
+      # The example needs Dart 3.13+, so it is resolved in its own job.
+      - run: flutter pub get --no-example
+      # lib/ is what pub.dev scores: infos are fatal there.
+      - run: flutter analyze lib
+      # Tests may use APIs a newer SDK deprecates (e.g. material.dart in 3.50).
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test
+
+  # State-library tests (provider, Riverpod, Bloc, GetX, MobX, signals, hooks).
+  example:
+    name: example (Flutter ${{ matrix.flutter }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        flutter: ['3.47.x', '3.50.x']
+    defaults:
+      run:
+        working-directory: example
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ matrix.flutter }}
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test
+
+  # Formatting and publish readiness, checked once on the newest stable.
+  publish-check:
+    name: format + publish dry-run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.50.x'
+          cache: true
+      - run: flutter pub get
+      - run: dart format --output=none --set-exit-if-changed lib test example/lib example/test
+      - run: flutter pub publish --dry-run

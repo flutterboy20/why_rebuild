@@ -1,5 +1,7 @@
 # why_rebuild
 
+[![CI](https://github.com/flutterboy20/why_rebuild/actions/workflows/ci.yml/badge.svg)](https://github.com/flutterboy20/why_rebuild/actions/workflows/ci.yml)
+
 **DevTools shows *what* rebuilt. why_rebuild shows *why*, and your AI agent can ask it too.**
 
 A debug-only Flutter package that tells you, for every app widget rebuild:
